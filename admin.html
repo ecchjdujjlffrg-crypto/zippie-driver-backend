@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Админка - Управление водителями</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0f172a; color: #fff; font-family: system-ui, -apple-system, sans-serif; padding: 20px; }
+        .container { max-width: 700px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 30px; color: #38BDF8; }
+        .card { background: #1e293b; border-radius: 24px; padding: 20px; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: #94A3B8; font-size: 12px; }
+        input { width: 100%; padding: 12px; border-radius: 16px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 14px; }
+        button { width: 100%; padding: 14px; background: #38BDF8; border: none; border-radius: 20px; color: #0F172A; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 14px; }
+        button:hover { opacity: 0.9; }
+        .delete-btn { background: #EF4444; margin-top: 8px; }
+        .delete-btn:hover { background: #DC2626; }
+        .success { background: #22C55E; padding: 10px; border-radius: 12px; margin-top: 10px; text-align: center; }
+        .error { background: #EF4444; padding: 10px; border-radius: 12px; margin-top: 10px; text-align: center; }
+        hr { margin: 20px 0; border-color: #334155; }
+        h2 { font-size: 18px; margin-bottom: 15px; color: #38BDF8; }
+        .driver-list { background: #0f172a; border-radius: 16px; padding: 15px; margin-bottom: 10px; position: relative; }
+        .driver-list p { margin: 5px 0; font-size: 13px; }
+        .driver-list strong { color: #38BDF8; }
+        .password { font-family: monospace; color: #F59E0B; }
+        .driver-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .driver-login { font-size: 12px; color: #64748B; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 Управление водителями</h1>
+        
+        <div class="card">
+            <div class="form-group">
+                <label>Логин *</label>
+                <input type="text" id="login" placeholder="Логин водителя">
+            </div>
+            <div class="form-group">
+                <label>Пароль *</label>
+                <input type="text" id="password" placeholder="Пароль">
+            </div>
+            <div class="form-group">
+                <label>ФИО *</label>
+                <input type="text" id="full_name" placeholder="Иванов Иван Иванович">
+            </div>
+            <div class="form-group">
+                <label>Телефон *</label>
+                <input type="tel" id="phone" placeholder="+7 (999) 123-45-67">
+            </div>
+            <div class="form-group">
+                <label>Марка / Модель авто</label>
+                <input type="text" id="car_model" placeholder="Hyundai Solaris">
+            </div>
+            <div class="form-group">
+                <label>Год выпуска</label>
+                <input type="text" id="car_year" placeholder="2020">
+            </div>
+            <div class="form-group">
+                <label>Цвет</label>
+                <input type="text" id="car_color" placeholder="Белый">
+            </div>
+            <div class="form-group">
+                <label>Госномер</label>
+                <input type="text" id="car_plate" placeholder="А123ВС 777">
+            </div>
+            <button onclick="registerDriver()">➕ Создать водителя</button>
+            <div id="message"></div>
+        </div>
+        
+        <hr>
+        <h2>📋 Список водителей</h2>
+        <div id="driverList"></div>
+    </div>
+
+    <script>
+        const SERVER = window.location.origin;
+        
+        async function registerDriver() {
+            const data = {
+                login: document.getElementById('login').value.trim(),
+                password: document.getElementById('password').value.trim(),
+                full_name: document.getElementById('full_name').value.trim(),
+                phone: document.getElementById('phone').value.trim(),
+                car_model: document.getElementById('car_model').value.trim(),
+                car_year: document.getElementById('car_year').value.trim(),
+                car_color: document.getElementById('car_color').value.trim(),
+                car_plate: document.getElementById('car_plate').value.trim()
+            };
+            
+            if (!data.login || !data.password || !data.full_name || !data.phone) {
+                showMessage('Заполните обязательные поля: Логин, Пароль, ФИО, Телефон', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${SERVER}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`✅ ${result.message}`, 'success');
+                    clearForm();
+                    loadDrivers();
+                } else {
+                    showMessage(`❌ ${result.message}`, 'error');
+                }
+            } catch (error) {
+                showMessage('❌ Ошибка соединения с сервером', 'error');
+            }
+        }
+        
+        async function deleteDriver(login) {
+            if (!confirm(`Удалить водителя ${login}?`)) return;
+            
+            try {
+                const response = await fetch(`${SERVER}/delete_driver`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ login: login })
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`✅ ${result.message}`, 'success');
+                    loadDrivers();
+                } else {
+                    showMessage(`❌ ${result.message}`, 'error');
+                }
+            } catch (error) {
+                showMessage('❌ Ошибка соединения с сервером', 'error');
+            }
+        }
+        
+        function showMessage(text, type) {
+            const msgDiv = document.getElementById('message');
+            msgDiv.innerHTML = `<div class="${type}">${text}</div>`;
+            setTimeout(() => {
+                msgDiv.innerHTML = '';
+            }, 3000);
+        }
+        
+        function clearForm() {
+            document.getElementById('login').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('full_name').value = '';
+            document.getElementById('phone').value = '';
+            document.getElementById('car_model').value = '';
+            document.getElementById('car_year').value = '';
+            document.getElementById('car_color').value = '';
+            document.getElementById('car_plate').value = '';
+        }
+        
+        async function loadDrivers() {
+            try {
+                const response = await fetch(`${SERVER}/drivers`);
+                const drivers = await response.json();
+                const listDiv = document.getElementById('driverList');
+                
+                if (drivers.length === 0) {
+                    listDiv.innerHTML = '<p style="text-align:center; color:#64748B;">Нет зарегистрированных водителей</p>';
+                    return;
+                }
+                
+                listDiv.innerHTML = '';
+                drivers.forEach(d => {
+                    listDiv.innerHTML += `
+                        <div class="driver-list">
+                            <div class="driver-header">
+                                <div>
+                                    <strong>${d.full_name}</strong>
+                                    <span class="driver-login">(${d.login})</span>
+                                </div>
+                                <button class="delete-btn" style="width: auto; padding: 6px 12px; font-size: 12px;" onclick="deleteDriver('${d.login}')">❌ Удалить</button>
+                            </div>
+                            <p>📞 ${d.phone}</p>
+                            <p>🔐 Пароль: <span class="password">${d.raw_password || '***'}</span></p>
+                            <p>🚗 ${d.car_model || '—'} ${d.car_year || ''} ${d.car_color || ''}</p>
+                            <p>🔢 ${d.car_plate || '—'}</p>
+                        </div>
+                    `;
+                });
+            } catch (error) {
+                document.getElementById('driverList').innerHTML = '<p style="text-align:center; color:#EF4444;">Ошибка загрузки списка</p>';
+            }
+        }
+        
+        loadDrivers();
+    </script>
+</body>
+</html>

@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Zippie — Курьер и Водитель</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=b4c0374d-800d-4a7b-b3ac-8e6a69caefbb&suggest_apikey=b4c0374d-800d-4a7b-b3ac-8e6a69caefbb" type="text/javascript"></script>
+    <script src="https://unpkg.com/imask"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;900&display=swap" rel="stylesheet">
+    <style>
+        body { background: #0f172a; font-family: 'Montserrat', sans-serif; color: white; -webkit-tap-highlight-color: transparent; }
+        .premium-input { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white; transition: 0.3s; }
+        .premium-input:focus { border-color: #38bdf8; outline: none; background: rgba(255,255,255,0.1); }
+        .service-btn { border: 1px solid rgba(56, 189, 248, 0.3); transition: 0.3s; color: rgba(255,255,255,0.5); }
+        .service-btn.active { background: #38bdf8; color: #000; font-weight: 900; border-color: #38bdf8; box-shadow: 0 0 15px rgba(56, 189, 248, 0.4); }
+        .prestige-title { background: linear-gradient(to right, #fff, #38bdf8); -webkit-background-clip: text; color: transparent; font-size: 48px; letter-spacing: -1px; }
+        
+        .ymaps-2-1-79-suggest-item { background-color: #1e293b !important; color: white !important; padding: 12px 16px !important; border-bottom: 1px solid rgba(255,255,255,0.05) !important; }
+        .ymaps-2-1-79-suggest-view { border-radius: 12px !important; border: 1px solid rgba(255,255,255,0.1) !important; z-index: 9999 !important; }
+        
+        .modal-overlay { transition: all 0.3s ease; z-index: 10000; }
+        .modal-content { transform: scale(0.9); transition: all 0.3s ease; background: #0f172a; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 2.5rem; }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal-overlay.active .modal-content { transform: scale(1); }
+        .backdrop-blur-custom { backdrop-filter: blur(8px); background-color: rgba(0, 0, 0, 0.7); }
+    </style>
+</head>
+<body class="antialiased p-4">
+
+    <!-- Модалка подсказки -->
+    <div id="help_modal" class="modal-overlay fixed inset-0 flex items-center justify-center p-6 backdrop-blur-custom opacity-0 pointer-events-none">
+        <div class="modal-content p-8 shadow-2xl max-w-xs w-full text-center">
+            <div class="w-12 h-12 rounded-full bg-sky-500/20 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <h3 class="text-sky-400 font-black text-sm uppercase tracking-widest mb-3">Подсказка</h3>
+            <p class="text-white/70 text-sm mb-6">Укажите в комментарии детали: подъезд, код домофона или что нужно купить.</p>
+            <button onclick="closeModal('help_modal')" class="w-full py-3 bg-sky-500 text-black font-black rounded-xl uppercase text-[10px]">Понятно</button>
+        </div>
+    </div>
+
+    <!-- Модалка политики конфиденциальности -->
+    <div id="policy_modal" class="modal-overlay fixed inset-0 flex items-center justify-center p-6 backdrop-blur-custom opacity-0 pointer-events-none">
+        <div class="modal-content p-8 shadow-2xl max-w-xs w-full text-center">
+            <div class="w-12 h-12 rounded-full bg-sky-500/20 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            </div>
+            <h3 class="text-sky-400 font-black text-sm uppercase tracking-widest mb-3">Политика конфиденциальности</h3>
+            <div class="text-white/70 text-sm mb-6 text-left space-y-2">
+                <p>Мы собираем только телефон и адрес для доставки.</p>
+                <p>Данные хранятся 30 дней и не передаются третьим лицам.</p>
+                <p>Полный текст — в футере сайта.</p>
+            </div>
+            <button onclick="closeModal('policy_modal')" class="w-full py-3 bg-sky-500 text-black font-black rounded-xl uppercase text-[10px]">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- Модалка успешной отправки -->
+    <div id="success_modal" class="modal-overlay fixed inset-0 flex items-center justify-center p-6 backdrop-blur-custom opacity-0 pointer-events-none">
+        <div class="modal-content p-8 shadow-2xl max-w-xs w-full text-center">
+            <div class="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h3 class="text-green-400 font-black text-sm uppercase tracking-widest mb-3">Заказ принят</h3>
+            <p class="text-white/70 text-sm mb-6">Ваш заказ успешно отправлен. Скоро с вами свяжется оператор.</p>
+            <button onclick="closeModalAndReload('success_modal')" class="w-full py-3 bg-green-500 text-black font-black rounded-xl uppercase text-[10px]">Отлично</button>
+        </div>
+    </div>
+
+    <!-- Модалка ошибки -->
+    <div id="error_modal" class="modal-overlay fixed inset-0 flex items-center justify-center p-6 backdrop-blur-custom opacity-0 pointer-events-none">
+        <div class="modal-content p-8 shadow-2xl max-w-xs w-full text-center">
+            <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <h3 class="text-red-400 font-black text-sm uppercase tracking-widest mb-3">Ошибка</h3>
+            <p class="text-white/70 text-sm mb-6">Не удалось отправить заказ. Убедитесь, что сервер запущен.</p>
+            <button onclick="closeModal('error_modal')" class="w-full py-3 bg-red-500 text-black font-black rounded-xl uppercase text-[10px]">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- ОСНОВНОЙ КОНТЕНТ -->
+    <div class="max-w-md mx-auto bg-slate-900/50 backdrop-blur-2xl rounded-[2.5rem] border border-white/10 shadow-2xl overflow-hidden mt-4">
+        
+        <header class="pt-10 pb-6 px-6 text-center border-b border-white/5">
+            <h1 class="prestige-title text-5xl md:text-6xl font-black uppercase tracking-tighter">zippie.ru</h1>
+            <p class="text-sky-400/80 text-xs font-bold tracking-widest mt-3">ДОСТАВКА • КУРЬЕР • ВОДИТЕЛЬ</p>
+        </header>
+
+        <main class="p-6 space-y-5">
+            <div class="flex gap-2">
+                <button onclick="setService('courier')" id="btn_courier" class="service-btn active flex-1 py-3 rounded-2xl text-xs font-bold">КУРЬЕР</button>
+                <button onclick="setService('driver')" id="btn_driver" class="service-btn flex-1 py-3 rounded-2xl text-xs font-bold">ВОДИТЕЛЬ</button>
+            </div>
+
+            <div id="address_container" class="space-y-4">
+                <div class="addr-group">
+                    <label class="text-[10px] text-sky-400 font-bold ml-2 mb-1 block uppercase">Адрес 1 (Откуда)</label>
+                    <input id="suggest_1" type="text" placeholder="Улица и дом" class="premium-input w-full p-4 rounded-2xl text-sm addr-input" autocomplete="off">
+                </div>
+                <div class="addr-group">
+                    <label class="text-[10px] text-sky-400 font-bold ml-2 mb-1 block uppercase">Адрес 2 (Куда)</label>
+                    <input id="suggest_2" type="text" placeholder="Улица и дом" class="premium-input w-full p-4 rounded-2xl text-sm addr-input" autocomplete="off">
+                </div>
+            </div>
+
+            <button id="add_stop_btn" onclick="addAddressField()" class="w-full py-3 border border-dashed border-sky-500/30 text-sky-400 rounded-2xl text-[10px] font-bold uppercase">+ Добавить адрес</button>
+
+            <div id="price_block" class="hidden bg-sky-500/10 border border-sky-500/20 rounded-2xl p-4 flex justify-between items-center">
+                <div>
+                    <p class="text-[10px] text-sky-400 uppercase font-bold">Дистанция</p>
+                    <p class="text-2xl font-black"><span id="dist_val">0</span> <span class="text-sm opacity-40">км</span></p>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] text-sky-400 uppercase font-bold">Стоимость</p>
+                    <p class="text-3xl font-black text-sky-400"><span id="price_val">0</span> <span class="text-sm opacity-40">₽</span></p>
+                </div>
+            </div>
+
+            <div id="comment_block">
+                <div class="flex items-center gap-2 mb-1 ml-2">
+                    <label class="text-[10px] text-sky-400 font-bold uppercase">Детали заказа</label>
+                    <button onclick="openModal('help_modal')" class="w-4 h-4 rounded-full border border-sky-400/50 text-sky-400 text-[9px]">?</button>
+                </div>
+                <textarea id="comment" rows="2" placeholder="Напишите детали здесь..." class="premium-input w-full p-4 rounded-2xl text-sm"></textarea>
+            </div>
+
+            <div>
+                <label class="text-[10px] text-sky-400 font-bold ml-2 mb-1 block uppercase">Телефон</label>
+                <input id="phone" type="tel" placeholder="+7 (___) ___-__-__" class="premium-input w-full p-4 rounded-2xl text-lg font-bold">
+            </div>
+
+            <!-- Галочка согласия -->
+            <div class="bg-slate-800/30 rounded-xl p-3">
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" id="consent_checkbox" class="mt-0.5 w-4 h-4 accent-sky-500">
+                    <span class="text-[10px] text-white/70 leading-relaxed">
+                        Я даю согласие на обработку моих персональных данных (телефон и адрес) в соответствии с 
+                        <button type="button" onclick="openModal('policy_modal')" class="text-sky-400 underline font-bold">Политикой конфиденциальности</button>
+                    </span>
+                </label>
+            </div>
+
+            <!-- Кнопка заказа -->
+            <button id="order_btn" disabled class="w-full py-5 bg-slate-800 text-slate-500 font-black rounded-2xl uppercase tracking-widest transition-all">Заполните данные</button>
+        </main>
+
+        <!-- Футер -->
+        <footer class="px-6 pb-6 text-center border-t border-white/5 pt-4 mt-2">
+            <div class="text-[9px] text-white/30 space-y-2">
+                <p>ИП Демко-Григорьева И.И. | ИНН 0000000000 | ОГРНИП 323000000000000 | Email: support@zippie.ru</p>
+                
+                <details class="cursor-pointer text-left text-[9px]">
+                    <summary class="text-sky-400/70 inline-block text-[9px] hover:text-sky-400">📜 Полный текст политики конфиденциальности</summary>
+                    <div class="mt-3 space-y-2 text-white/50 text-[8px] leading-relaxed">
+                        <p><strong class="text-white/70">1. Общие положения</strong><br>Настоящая Политика определяет порядок обработки персональных данных...</p>
+                        <p><strong class="text-white/70">2. Какие данные собираются</strong><br>Номер телефона; адрес отправления и назначения; комментарий к заказу; IP-адрес; данные cookie.</p>
+                        <p><strong class="text-white/70">3. Цели обработки</strong><br>Оформление и выполнение заказа, связь с клиентом, расчёт стоимости.</p>
+                        <p><strong class="text-white/70">4. Срок хранения</strong><br>30 дней с момента заказа.</p>
+                        <p><strong class="text-white/70">5. Контакты</strong><br>Email: support@zippie.ru</p>
+                        <p class="text-white/30 pt-2">© 2025 Zippie — сервис премиальной доставки</p>
+                    </div>
+                </details>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        let currentService = 'courier';
+        let isPriceCalculated = false;
+        let totalAddresses = 2;
+        let phoneMask;
+        let suggests = {};
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+        
+        function closeModalAndReload(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+            location.reload();
+        }
+
+        ymaps.ready(() => {
+            phoneMask = IMask(document.getElementById('phone'), { mask: '+{7} (000) 000-00-00' });
+            initSuggest('suggest_1');
+            initSuggest('suggest_2');
+            document.getElementById('order_btn').onclick = sendOrder;
+            document.getElementById('phone').oninput = updateButtonState;
+            document.getElementById('consent_checkbox').onchange = updateButtonState;
+            
+            document.querySelectorAll('.addr-input').forEach(input => {
+                input.addEventListener('input', () => calculate());
+                input.addEventListener('blur', () => calculate());
+            });
+        });
+
+        function setService(type) {
+            if (currentService === type) return;
+            currentService = type;
+
+            document.getElementById('btn_courier').classList.toggle('active', type === 'courier');
+            document.getElementById('btn_driver').classList.toggle('active', type === 'driver');
+
+            document.querySelectorAll('.addr-input').forEach(input => input.value = '');
+            document.getElementById('comment').value = '';
+            document.getElementById('price_block').classList.add('hidden');
+            isPriceCalculated = false;
+            updateButtonState();
+
+            const container = document.getElementById('address_container');
+            while (container.children.length > 2) {
+                container.removeChild(container.lastChild);
+            }
+            totalAddresses = 2;
+            document.getElementById('add_stop_btn').style.display = 'block';
+
+            for (let id in suggests) {
+                if (suggests[id]) {
+                    suggests[id].destroy();
+                    initSuggest(id);
+                }
+            }
+        }
+
+        function addAddressField() {
+            if (totalAddresses >= 5) return;
+            totalAddresses++;
+            const id = `suggest_${totalAddresses}`;
+            const div = document.createElement('div');
+            div.className = "addr-group";
+            div.innerHTML = `<label class="text-[10px] text-sky-400 font-bold mt-4 mb-1 block uppercase">Адрес ${totalAddresses}</label>
+                             <input id="${id}" type="text" placeholder="Улица и дом" class="premium-input w-full p-4 rounded-2xl text-sm addr-input" autocomplete="off">`;
+            document.getElementById('address_container').appendChild(div);
+            initSuggest(id);
+            if (totalAddresses === 5) document.getElementById('add_stop_btn').style.display = 'none';
+        }
+
+        function initSuggest(id) {
+            const input = document.getElementById(id);
+            const s = new ymaps.SuggestView(id, { 
+                boundedBy: [[60.85, 76.35], [61.05, 76.75]], 
+                strictBounds: true,
+                results: 5
+            });
+            
+            suggests[id] = s;
+
+            s.events.add('select', (e) => {
+                const clean = e.get('item').value
+                    .replace(/^.*Нижневартовск,\s*/i, '')
+                    .replace(/^.*Югра,\s*/i, '')
+                    .replace(/^,/, '').trim();
+                input.value = clean;
+                
+                s.destroy(); 
+                input.blur();
+                
+                setTimeout(() => {
+                    initSuggest(id);
+                    calculate();
+                }, 200);
+            });
+        }
+
+        async function calculate() {
+            const inputs = Array.from(document.querySelectorAll('.addr-input'));
+            const values = inputs.map(i => i.value.trim()).filter(v => v.length > 3);
+            
+            if (values.length >= 2) {
+                try {
+                    const route = await ymaps.route(values.map(v => "Нижневартовск, " + v));
+                    const km = Math.ceil(route.getLength() / 1000);
+                    let base = currentService === 'courier' ? 300 : 1000;
+                    let perKm = currentService === 'courier' ? 30 : 80;
+                    let price = base + (km * perKm);
+                    if (values.length > 2) price += (values.length - 2) * 150;
+
+                    document.getElementById('dist_val').innerText = km;
+                    document.getElementById('price_val').innerText = price;
+                    document.getElementById('price_block').classList.remove('hidden');
+                    isPriceCalculated = true;
+                } catch (e) {
+                    isPriceCalculated = false;
+                    document.getElementById('price_block').classList.add('hidden');
+                }
+            } else {
+                isPriceCalculated = false;
+                document.getElementById('price_block').classList.add('hidden');
+            }
+            updateButtonState();
+        }
+
+        function updateButtonState() {
+            const btn = document.getElementById('order_btn');
+            const phoneOk = phoneMask && phoneMask.unmaskedValue.length === 11;
+            const consentOk = document.getElementById('consent_checkbox').checked;
+            
+            if (isPriceCalculated && phoneOk && consentOk) {
+                btn.disabled = false;
+                btn.innerText = "ЗАКАЗАТЬ";
+                btn.className = "w-full py-5 bg-sky-500 text-black font-black rounded-2xl uppercase tracking-widest shadow-lg shadow-sky-500/20 active:scale-95 transition-all";
+            } else {
+                btn.disabled = true;
+                if (!isPriceCalculated) btn.innerText = "УКАЖИТЕ АДРЕСА";
+                else if (!phoneOk) btn.innerText = "ВВЕДИТЕ ТЕЛЕФОН";
+                else if (!consentOk) btn.innerText = "НУЖНО СОГЛАСИЕ";
+                else btn.innerText = "ЗАПОЛНИТЕ ДАННЫЕ";
+                btn.className = "w-full py-5 bg-slate-800 text-slate-500 font-black rounded-2xl uppercase tracking-widest";
+            }
+        }
+
+        async function sendOrder() {
+            const btn = document.getElementById('order_btn');
+            btn.disabled = true;
+            btn.innerText = "ОТПРАВКА...";
+
+            const addrInputs = Array.from(document.querySelectorAll('.addr-input'));
+            const addresses = addrInputs.map(i => i.value.trim()).filter(v => v.length > 0);
+            
+            const payload = {
+                service: currentService === 'courier' ? "КУРЬЕР" : "ВОДИТЕЛЬ",
+                addresses: addresses,
+                price: document.getElementById('price_val').innerText,
+                phone: document.getElementById('phone').value,
+                comment: document.getElementById('comment').value
+            };
+
+            try {
+                const res = await fetch('/new_order', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    openModal('success_modal');
+                } else {
+                    throw new Error();
+                }
+            } catch (e) {
+                openModal('error_modal');
+                btn.disabled = false;
+                btn.innerText = "ЗАКАЗАТЬ";
+                updateButtonState();
+            }
+        }
+    </script>
+</body>
+</html>
