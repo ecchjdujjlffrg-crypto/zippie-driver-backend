@@ -95,8 +95,15 @@ async def handle_delete_driver(request):
         return web.json_response({"success": False, "message": str(e)})
 
 async def handle_new_order(request):
+    # Обработка предварительного запроса OPTIONS (CORS)
     if request.method == 'OPTIONS':
-        return web.Response(headers={'Access-Control-Allow-Origin': '*'})
+        return web.Response(
+            headers={
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type'
+            }
+        )
     try:
         data = await request.json()
         order_id = str(int(datetime.datetime.now().timestamp() * 1000))
@@ -124,10 +131,13 @@ async def handle_new_order(request):
         }
         print(f"📦 Новый заказ: {order_id} | Адресов: {len(addresses)}")
         await broadcast_orders()
-        return web.Response(text="OK", headers={'Access-Control-Allow-Origin': '*'})
+        return web.Response(
+            text="OK",
+            headers={'Access-Control-Allow-Origin': '*'}
+        )
     except Exception as e:
         print(e)
-        return web.Response(status=500)
+        return web.Response(status=500, headers={'Access-Control-Allow-Origin': '*'})
 
 async def websocket_handler(request):
     ws = web.WebSocketResponse()
