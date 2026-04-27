@@ -313,6 +313,8 @@ def load_drivers():
 
 # ==================== ЗАПУСК ====================
 
+# ==================== ЗАПУСК ====================
+
 async def main():
     load_drivers()
     
@@ -330,16 +332,18 @@ async def main():
     
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    
+    # Используем порт от Render (или 8080 локально)
+    port = int(os.environ.get('PORT', 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
     
     print("="*50)
     print("✅ СЕРВЕР ЗАПУЩЕН!")
     print("="*50)
-    print("📱 САЙТ ЗАКАЗЧИКА: http://localhost:8080/")
-    print("👨‍💼 АДМИН-ПАНЕЛЬ: http://localhost:8080/admin")
-    print("🚚 WebSocket: ws://localhost:8080/ws")
-    print("📱 Firebase Push: активен")
+    print(f"📱 САЙТ ЗАКАЗЧИКА: http://localhost:{port}/")
+    print(f"👨‍💼 АДМИН-ПАНЕЛЬ: http://localhost:{port}/admin")
+    print(f"🚚 WebSocket: ws://localhost:{port}/ws")
     print("="*50)
     
     await asyncio.Future()
