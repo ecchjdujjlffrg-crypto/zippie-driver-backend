@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import hashlib
+import requests
 from aiohttp import web, WSMsgType
 
 active_orders = {}
@@ -9,9 +10,47 @@ completed_orders = {}
 driver_sessions = {}
 drivers = {}
 driver_stats = {}
+driver_tokens = {}  # {login: fcm_token}
+
+# Firebase Server Key
+FCM_SERVER_KEY = "BHdFs6ZfDwSN-kqhQqs9SV55Bs3KT9--Gy7CNVXwMMrUGUFWI397NOn3hz1-rs5OuhjcrDQCeWKc_cjQRLLnURM"
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+# ==================== FIREBASE PUSH ====================
+
+def send_fcm_push(token, title, body):
+    """Отправка push-уведомления через Firebase"""
+    if not token:
+        return
+    
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'key={FCM_SERVER_KEY}'
+    }
+    
+    payload = {
+        'to': token,
+        'notification': {
+            'title': title,
+            'body': body,
+            'sound': 'default',
+            'vibrate': 'true'
+        }
+    }
+    
+    try:
+        response = requests.post('https://fcm.googleapis.com/fcm/send', 
+                                 headers=headers, json=payload, timeout=5)
+        print(f"📤 FCM отправлено: {response.status_code}")
+    except Exception as e:
+        print(f"❌ FCM ошибка: {e}")
+
+def send_push_to_all_drivers(title, body):
+    """Отправка push всем водителям"""
+    for login, token in driver_tokens.items():
+        send_fcm_push(token, title, body)
 
 # ==================== ОБРАБОТЧИКИ ====================
 
@@ -51,7 +90,12 @@ async def handle_login(request):
         data = await request.json()
         login = data.get('login')
         password = data.get('password')
+        fcm_token = data.get('fcm_token')
+        
         if login in drivers and drivers[login]["password"] == hash_password(password):
+            if fcm_token:
+                driver_tokens[login] = fcm_token
+                print(f"📱 Токен сохранён для {login}")
             return web.json_response({
                 "success": True,
                 "full_name": drivers[login]["full_name"],
@@ -62,6 +106,19 @@ async def handle_login(request):
                 "car_plate": drivers[login].get("car_plate", "")
             })
         return web.json_response({"success": False, "message": "Неверный логин или пароль"})
+    except Exception as e:
+        return web.json_response({"success": False, "message": str(e)})
+
+async def handle_update_fcm_token(request):
+    """Обновление FCM токена водителя"""
+    try:
+        data = await request.json()
+        login = data.get('login')
+        token = data.get('fcm_token')
+        if token and login:
+            driver_tokens[login] = token
+            print(f"📱 Обновлён токен для {login}")
+        return web.json_response({"success": True})
     except Exception as e:
         return web.json_response({"success": False, "message": str(e)})
 
@@ -84,6 +141,10 @@ async def handle_delete_driver(request):
         login = data.get('login')
         if login not in drivers:
             return web.json_response({"success": False, "message": "Водитель не найден"})
+        
+        # Удаляем токен
+        if login in driver_tokens:
+            del driver_tokens[login]
         
         del drivers[login]
         
@@ -130,7 +191,18 @@ async def handle_new_order(request):
             'created_at': datetime.datetime.now().isoformat()
         }
         print(f"📦 Новый заказ: {order_id} | Адресов: {len(addresses)}")
+        
+        # Отправляем WebSocket уведомление всем водителям
         await broadcast_orders()
+        
+        # Отправляем Firebase Push уведомления всем водителям
+        service_name = data.get('service', 'ЗАКАЗ')
+        addr_start = addresses[0] if addresses else ''
+        addr_end = addresses[-1] if len(addresses) > 1 else ''
+        title = f"🆕 {service_name}"
+        body = f"{addr_start} → {addr_end}"
+        send_push_to_all_drivers(title, body)
+        
         return web.Response(
             text="OK",
             headers={'Access-Control-Allow-Origin': '*'}
@@ -143,6 +215,14 @@ async def websocket_handler(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
     driver_name = request.query.get('name', '')
+    
+    # Проверяем, существует ли водитель
+    if driver_name not in drivers:
+        print(f"❌ Водитель {driver_name} не найден")
+        await ws.send_json({'type': 'error', 'message': 'Водитель не найден'})
+        await ws.close()
+        return ws
+    
     if driver_name:
         driver_sessions[driver_name] = ws
         print(f"🔌 Водитель {driver_name} подключился")
@@ -241,6 +321,7 @@ async def main():
     app.router.add_get('/admin', handle_admin)
     app.router.add_post('/register', handle_register)
     app.router.add_post('/login', handle_login)
+    app.router.add_post('/update_fcm_token', handle_update_fcm_token)
     app.router.add_get('/drivers', handle_drivers)
     app.router.add_post('/delete_driver', handle_delete_driver)
     app.router.add_post('/new_order', handle_new_order)
@@ -258,6 +339,7 @@ async def main():
     print("📱 САЙТ ЗАКАЗЧИКА: http://localhost:8080/")
     print("👨‍💼 АДМИН-ПАНЕЛЬ: http://localhost:8080/admin")
     print("🚚 WebSocket: ws://localhost:8080/ws")
+    print("📱 Firebase Push: активен")
     print("="*50)
     
     await asyncio.Future()
